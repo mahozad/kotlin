@@ -1,0 +1,40 @@
+/*
+ * Copyright 2010-2024 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+package org.jetbrains.kotlin.ir.util
+
+import org.jetbrains.kotlin.ir.declarations.IrTypeParametersContainer
+import org.jetbrains.kotlin.ir.types.*
+import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
+import org.jetbrains.kotlin.ir.types.impl.IrTypeAbbreviationImpl
+import org.jetbrains.kotlin.ir.types.impl.makeTypeProjection
+import org.jetbrains.kotlin.utils.memoryOptimizedMap
+
+class SimpleTypeRemapper(
+    private val symbolRemapper: SymbolRemapper
+) : AbstractTypeRemapper() {
+
+    override fun remapTypeOrNull(type: IrType): IrType? {
+        if (type !is IrSimpleType) return null
+        val symbol = symbolRemapper.getReferencedClassifier(type.classifier)
+        val arguments = remapTypeArguments(type.arguments)
+        if (symbol == type.classifier && arguments == null && type.abbreviation == null) return null
+        return IrSimpleTypeImpl(
+            symbol,
+            type.nullability,
+            arguments ?: type.arguments,
+            type.annotations,
+            type.abbreviation?.remapTypeAbbreviation()
+        )
+    }
+
+    private fun IrTypeAbbreviation.remapTypeAbbreviation() =
+        IrTypeAbbreviationImpl(
+            symbolRemapper.getReferencedTypeAlias(typeAlias),
+            hasQuestionMark,
+            arguments.memoryOptimizedMap { remapTypeArgument(it) ?: it },
+            annotations
+        )
+}
